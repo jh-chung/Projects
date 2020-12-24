@@ -1,0 +1,567 @@
+---
+author: "Jay-Ho Chung"
+date: "3/18/2020"
+title: "MATH216 MIDTERM: Icaruses"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    highlight: tango
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+---
+
+```{r, include = FALSE}
+
+url <- "https://collectionapi.metmuseum.org/api/collection/v1/iiif/337069/741187/restricted"
+```
+
+<center><img src="`r url`"></center>  
+[*Icarus, plate VIII*](https://www.metmuseum.org/art/collection/search/337069). Henri Matisse. (1947).
+
+#Introduction
+**Note: if you find airplane fatalities -- for whatever reason -- to be disturbing, please strongly consider avoiding reading this article. I would like to emphasize that I am by no means attempting to trivialize the impact of fatalities from airplane accidents. Rather, given that I have traveled on airplanes rather frequently since a very early age, I found this to be an interesting dataset to explore. If this material is uncomfortable -- especially given its personal nature, I would consider avoiding this article and I would like to sincerely apologize for any potential distress.**  
+
+For the longest time, humans have been attempting to master flight with many civilizations -- from the [Hindu](https://m.outdoorrevival.com/instant-articles/mans-obsession-with-flight-and-adventure.html) to Mesopotamians to Greeks -- studying or idolizing birds, dragons, lamassus, minokawas, or other flying creatures. After many failed attempts of many for several centuries by geniuses such as [da Vinci](https://aeon.co/ideas/humans-have-long-wished-to-fly-like-birds-maybe-we-shall), man made flight remained unattainable.
+It -- like the story of Icarus -- came with great costs too. da Vinci first maid a helicopter that his pupil Salai used, but Salai ended up injuring himself and da Vinci never attempted flight again. (Köster, Thomas. *50 Artists You Should Know*. Prestel). Nonetheless, people continued to aim for the sky (*Casablanca*).
+
+In the beginning of the 20th century, this became possible with the pioneers of manmade flight -- the [Wright Brothers](https://www.britannica.com/biography/Wright-brothers). The Linberghs (pioneer with a questionable history of vitriolic racism) and Earharts continue to push flight to its limits. The growth of the commercial airline industry then occurs after the [late 1950s](https://airandspace.si.edu/exhibitions/america-by-air/online/heyday/heyday11.cfm).    
+
+
+
+
+Yet, even today, flight comes with risks.  Like the Greeks described with Icarus, we can fly too close to the sky and ground to burn and crash. I would like to look into airplane deaths and explore which airlines result in the most deaths.   
+
+
+##Digging Into the Data
+The [dataset](https://www.kaggle.com/cgurkan/airplane-crash-data-since-1908) we will be working with contains data of airplane crashes since 1908 to 2019.
+
+```{r (Packages & Dataset), warning = FALSE, message=FALSE}
+library(tidyverse)
+library(ggthemes)
+library(xtable)
+
+#p_orig <- read.csv("~/Downloads/airAccs.csv")
+
+p_crash <- read.csv("~/Downloads/airplanecrash.csv") #reading the .csv
+
+```
+
+```{r (messing around with the dataset), warning=FALSE}
+
+p_c <- p_crash %>% 
+  mutate(Fatalities = as.numeric(as.character(Fatalities)))
+
+p_c <- p_c %>% 
+  rename(date = Date, #renaming because I don't like capitalized names
+         dead = Fatalities, 
+         aboard = Aboard,
+         ground = Ground, 
+         location = Location,
+         operator = Operator,
+         planeType = AC.Type) 
+
+p_c <- p_c %>% 
+  separate(date, into = c("month", "day", "year"), sep = "/") #separate so we don't have weird format
+
+
+p_c50 <- p_c %>% 
+  filter(year >= 1950)
+
+p_c <- tbl_df(p_c) #prefer tibbles
+
+p_c
+```
+
+I have modified the dataset to contain these variables: `r names(p_c)`.     
+
+
+* To break it down, `month`, `day`, `year`, describe the month, day, and year of the accident respectively. 
+* `Time` describes the time of accident in military time  
+* `operator` describes the airline or whoever was operating the flight  
+* `Flight...` describes the flight number  
+* `Route` describes the route, stylized as "departing location-arrival"
+* `Registration` is the ICAO registration of the flight
+* `cn.ln` is the serial number of the plane
+* `aboard` describes the number of people on board
+    + `Aboard.Passangers` and `Aboard.Crew` describe how many passangers and crew members were present  
+* Similarly, `Fatalities.Passangers` and `Fatalities.Crew` describe how many fatalities were passangers and crew members  
+* `ground` describes the total number of people dead on the ground  
+* `summary` describes a description of the cause of the crash  
+
+
+Also note that `year` has been modified such that we will be looking at 1950 -- the start of the commerical airline industry -- onwards.  
+
+
+
+# Exploring the Data  
+
+To somewhat understand what the data looks like, here are some plots that simply describe the trend of airplane deaths and the distribution of airplane deaths.
+
+##Broad View
+
+```{r (Plot and Histogram), warning = FALSE}
+p_c %>% 
+  group_by(year) %>% 
+  summarize(total_dead = sum(dead)) %>% 
+  mutate(year = as.integer(year)) %>%  # this was put here to not show every year, rather in 10 year intervals
+  ggplot(aes(x = year , y = total_dead) ) +
+  geom_point(color = "dodgerblue4") + 
+  theme_fivethirtyeight() + # chosen to get rid of black gridlines b/c of the annotations
+  labs(title = "Airplane Deaths From 1908-2019",
+       subtitle = "Point Graph",
+       y = "Deaths") + 
+  theme(axis.text.x =  element_text(size = 10) ,
+        legend.position =  "none"
+          )  +
+  
+  annotate("text", 
+           x = 1945, y = 3400, 
+           label = "Start of \nCommerical \nAirline Industry", 
+           hjust = 0, 
+           size = 5 ,
+           family = "Heiti SC Medium"
+           ) +
+   geom_segment(aes(x = 1950, y = 1440, xend = 1950, yend = 3000), arrow = arrow(length = unit(0.015, "npc"))) + 
+  
+  #labeling end of World War II
+   annotate("text", 
+           x = 1902, y = 2100, 
+           label = "Start and End of \nWorld War II", 
+           hjust = 0, 
+           size = 5,
+           family = "Heiti SC Medium"
+             ) +
+  
+  #vertical line on the right side
+
+  
+  #vertical line on the right side
+  geom_segment(aes(x = 1945, y = 2000, xend = 1935, yend = 2000), arrow = arrow(length = unit(0.015, "npc"))) +
+  
+  #left side vert. line
+  geom_segment(aes ( x = 1939, y = 200, yend = 2000, xend = 1939)) + 
+  
+  geom_segment(aes ( x = 1945, y = 1400, yend = 2000, xend = 1945)) + 
+  ylim(0, 4000)
+```
+  
+  
+From the first plot, it appears as though the number of airplane deaths increases from 1908 to 1950 as more and more people tested with airplanes.  
+Then, after the boom of the commercial airline industry, the numbers stay quite high. Yet the numbers continue to fluctuate rapidly increase after 1950 to 1975, fluctuate a bit, then numbers appear to consistently drop from the 1990s.
+
+
+There is quite a bit of fluctuation in these numbers, however, as the next plot will illustrate.   
+
+Note that there are 8 missing years (1925, 1934-1936, 1942, 1944, 1947, 1954) which could also contribute to the fluctuation.  
+
+
+```{r (Area Plot and table), warning = FALSE}
+#Consider removing?
+p_c %>% 
+  group_by(year) %>% 
+  summarize(total_dead = sum(dead)) %>% 
+  mutate(year = as.integer(year)) %>%  # this was put here to not show every year, rather in 10 year intervals
+  ggplot(aes(x = year , y = total_dead) ) +
+  geom_area(fill = "dodgerblue4") + 
+  theme_fivethirtyeight() +
+  labs(title = "Airplane Deaths From 1908-2019",
+       subtitle = "Area Graph",
+       y = "Deaths") + 
+  theme(axis.text.x =  element_text(size = 10) ,
+        legend.position =  "none"
+          )  
+```
+
+
+
+
+```{r (table on dead for every year)}
+p_c %>% 
+  group_by(year) %>% 
+  summarize(total_dead = sum(dead))
+
+
+```
+
+If you look at the table, you can see that there is quite a bit of variation from year to year that is also represented in the *area plot*. Some reasons for these variations? I am not entirely sure and it would definitely be interesting to hear from someone more experienced with this topic than I am.    
+
+
+```{r (war time)}
+ 
+
+p_c %>% 
+  filter(year <= 1945, year >= 1939) %>% 
+  select(year , operator ,dead, location, Summary ) %>% 
+  filter(str_detect(Summary, "shot | Shot down") | str_detect(operator, "Military") )  
+
+
+```
+
+It appears as though the numbers from planes shot down during war (in this case World War II) are rather high the number of airplane deaths do not necessarily appear to increase during World War II.  Therefore, the number of airplane deaths are likely not completely captured. Nonetheless, the fact the numbers do not increase during World War II suggest that this dataset is not be complete. This is further backed by the [the description of this data -- which points out that it recorded military deaths of more than 10](https://www.kaggle.com/cgurkan/airplane-crash-data-since-1908). Therefore, even if singular fighter planes were shot down, they were not recorded.       
+
+Note that this is only a guess, and warrants more investigation.
+
+## Histogram
+
+```{r (Histogram), warning = FALSE}
+
+
+ggplot(p_c, aes(dead) ) +
+  geom_histogram(binwidth = 15, fill = "dodgerblue4") +
+  theme_fivethirtyeight() +
+  labs(title = "Distribution of Airplane Deaths (1908-2019)", x = "Number of Deaths", y = "Count", subtitlie = "Bin Width: 15") 
+  
+```
+
+
+
+```{r, eval = FALSE}
+t.test() #for 1950
+```
+
+Looking at the distribution of deaths from airplane deaths, it appears as though the distribution of airplane deaths is unimodal and rather skewed -- so I think that median and interquartile range will accurately describe the distribution. The median is `r median (na.omit(p_c)$dead)` while the interquartile range is `r IQR(p_crash$Fatalities)`.         
+
+The median is quite low, which is interesting. This could be because the number of airplane deaths is really dependent on the size of the airplane. The interquartile range is quite high but this may make sense airplanes generally carry many people aboard.   
+
+
+
+
+
+# Diving Deeper (Results)
+
+
+## Most Fatal Operators and Plane Types
+
+
+Now that we have explored the broad trends, we will specifically examine the years 1950 onwards. A few questions that interest me are which operators are the most deadly? Which plane types are the most deadly?   
+There
+
+## Most Fatal Operators
+```{r (Operators with the most usage), warning = FALSE, message=FALSE}
+
+head( p_c50 %>% 
+  group_by(operator) %>%  
+  select(operator, dead) %>% 
+  summarize(count = n()) %>% 
+  arrange(desc(count)) , 5)
+```
+The table above shows which operators have been involved in the most number of plane crashes. The top 5 most crashed operators are Aeroflot, the U.S. Air Force, Indian Airlines, Air France, and Philippine Airlines.   
+
+We will take this list an explore which of these five operators have resulted in the highest median number of deaths.  
+
+```{r (List of top 5 leading to deaths), warning = FALSE, message=FALSE}
+op_list <- c("Aeroflot",
+          "Military - U.S. Air Force",
+          "Indian Airlines",
+          "Air France",
+          "Philippine Air Lines")
+```
+
+
+```{r, warning = FALSE, message=FALSE}
+#making function that will make this for us
+oper_plot <- function(oper_id) { # takes in the operator id 
+  p_c50 %>% 
+    filter(operator == oper_id) %>% #choosing just the operators that we want
+    
+   # mutate(operator = reorder(operator, dead, FUN = median)) %>%  #reordering
+    ggplot(aes(x = operator, y = dead)) + 
+    
+    geom_boxplot(aes( fill = operator), position = position_dodge(4)) + #boxplot of the operators and the number dead
+    scale_fill_brewer(palette="Spectral") + 
+    
+    theme_foundation() +
+    labs(title = "Top 5 Most Frequent Operators of Plane Crashes", 
+         subtitle = "Post-1950 (Arranged Alphabetically)",
+         x = "Operator",
+         y = "Number of Dead")  +
+     theme(
+          axis.text.x =  element_text(size= 0) ,
+          axis.title.x = element_text(size = 0)
+          )
+
+}
+
+
+
+oper_plot(op_list)
+```
+
+
+
+Of these, note that Air France, Indian Airlines, Aeroflot, Philippine Airlines, and U.S. Air Force have the highest median number of deaths (in that order). The plot is not very intuitive in that regard; it does not list the operators by median.      
+
+
+Note that this is not necessarily a fair representation. Afterall, we can expect the U.S. Air Force to operate generally smaller planes than say Air France. Furthermore, this also goes for the difference between other airlines as well; much of this is dependent on what plane is being used as well. Furthermore, more work needs to be done if statistical significance is to be determined -- after all, the median appear rather similar to each other.    
+
+  
+
+
+
+
+
+### Most Fatal Plane Models
+
+Now going on, which plane models have been involved in the most number of accidents?    
+
+```{r}
+
+head(
+p_c50 %>% 
+  group_by(planeType) %>% 
+  select(planeType, dead) %>% 
+  summarize(count = n() ) %>% 
+  arrange(desc(count)) # 256 flights, and each of them 87 are dying
+, 5)
+
+
+# p_c50 %>% 
+#   group_by(planeType) %>% 
+#   select(planeType, dead) %>% 
+#   summarize(med_dead = median(dead)) %>% 
+#   arrange(desc(med_dead)) 
+# 
+# 
+# p_c50 %>% 
+#   group_by(planeType) %>% 
+#   select(planeType, dead) %>% 
+#   summarize(sum_dead = sum(dead)) %>% 
+#   arrange(desc(sum_dead)) #maybe graph is by sum?
+
+
+```
+So the top 5 plane models involved in plane crashes are the Douglas DC-3, de Havilland Canada DHC-6 Twin Otter 300, Douglas C-47A, Yakovlev YAK-40, and Antonov AN-26.  
+
+```{r (Plane Type), warning = FALSE, message=FALSE}
+type_list <- c("Douglas DC-3",
+          "de Havilland Canada DHC-6 Twin Otter 300",
+          "Douglas C-47A",
+          "Yakovlev YAK-40",
+          "Antonov AN-26")
+
+type_plot <- function(type_id) { # takes in the operator id 
+  p_c50 %>% 
+    filter(planeType == type_id) %>% #choosing just the operators that we want
+    #mutate(operator = reorder(planeType, dead, FUN = median)) %>% 
+    ggplot(aes(x = planeType, y = dead)) + 
+    
+    geom_boxplot(aes( fill = planeType), position = position_dodge(4) ) + #boxplot of the operators and the number dead
+    scale_fill_brewer(palette="RdYlGn") + 
+    
+    theme_foundation() +
+    labs(title = "Top 5 Most Frequent Plane Models in a Crash", 
+         subtitle = "Post-1950 (Arranged Alphabetically)",
+
+         y = "Number of Dead") +
+     theme(
+          axis.text.x =  element_text(size= 0) ,
+          axis.title.x = element_text(size = 0)
+          )
+
+  
+}
+
+
+
+type_plot(type_list)
+```
+
+
+Taking a look at the graph, it appears as though the Yakolev YAK-40, Douglas DC-3, Douglas C-47A, de Havilland Canada DHC-6 Twin Otter 300, and Antonov AN-26 have the highest median number of deaths, respectively. The plot is also not very intuitive in that regard; it does not list the plane types by median. This should definitely be something to fix in the future.       
+
+Once again though, this comes with a key side note. This could be be because varying planes have different capacities as well. Furthermore, statistical significance has not been thoroughly measured.  
+
+
+
+
+
+
+# Most Fatal Airlines
+
+On the note, let's examine some different fatalities throughout different continents. Note that this is likely an incomplete list as well of all airlines.  
+
+Note, however, that this could be a function of how many flights these companies charter. Perhaps the proportion of these airlines is actually not significantly different, but this data is not available.  
+
+
+
+
+##United States
+```{r (Airline Maker Functions)}
+# p_c %>% 
+#   filter(year >= 1950) %>% 
+#   group_by(operator) %>% 
+#   summarize(count = n())
+
+# this big function will basically help us find whatever airlines we would like
+air_findr <- function(name){
+  
+  p_c %>%
+  filter(year >= 1950) %>% 
+  filter(str_detect(operator, name)) 
+#  select(operator) %>% 
+#  group_by(operator)
+}
+
+c_plot <- function(country_air){ #c_plot or country plot
+  country_air %>% 
+  #mutate(operator = reorder(operator, dead, FUN = median)) %>% 
+  ggplot(aes(x = operator, y = dead) ) +
+  geom_boxplot(aes(fill = operator)) +
+  scale_fill_brewer(palette = "Spectral") +
+  theme_foundation() +
+  theme(
+    axis.text.x =  element_text(size= 0) ,
+        axis.title.x = element_text(size = 0)
+  )  +
+    labs(y = "Number of Dead")
+}
+
+```
+
+
+```{r (US airlines)}
+us_air <- air_findr("Delta Air Lines|American Airlines|United Airlines|Southwest Airlines|JetBlue") # list of some American airline companies
+us_air <- us_air %>% 
+  filter(operator !=  "China Southwest Airlines") %>% 
+  filter(operator != "Pacific Southwest Airlines / Private") %>% 
+  filter(operator != "American Airlines / Private") %>% 
+  filter(operator != "Southwest Airlines")  %>% 
+  filter(operator != "Delta Air Lines/ North Central Airlines")
+
+c_plot(us_air) +
+  labs(title = "Deaths in Major American Airlines") 
+
+```
+
+From the graph, it appears as though American Airlines, Pacific Southwest Airlines, then Delta Air Lines have the highest median of plane deaths.  
+
+There are some outliers, and -- once again -- this is likely because of varying plane sizes.  
+
+## Europe
+```{r (EUROPE)}
+euro_air <- air_findr("Air France|Lingus|Alitalia|Lufthansa|Ryanair|IAG|British Airways |Iberia")
+
+euro_air <- euro_air %>% 
+  filter(operator != "Lufthansa Cargo Airlines") %>%
+  filter(operator != "Lufthansa Cityline") %>%
+  filter(operator != "British Airways Helicopters") %>% 
+  filter(operator != "Iberia Airlines / Aviaco")
+
+
+c_plot(euro_air) +
+  labs(title = "Deaths in Major European Airlines") 
+```
+
+Taking a look at European Airlines, it appears as though Alitalia, Aer Lingus, Iberia Airlines, Lufthansa, then Air France had the highest median number of deaths.  
+
+
+## East Asia
+```{r (EAST ASIA)}
+easia_air <- air_findr("Korean|Nippon|Air China|China Southern|Asiana")
+
+easia_air <- easia_air %>% 
+  filter(operator != "Air China") %>%
+  filter(operator != "All Nippon Airways /  Japanese Air Force") %>%
+  filter(operator != "China Southern Airlines / Xiamen Airlines") %>% 
+  filter(operator != "Korean Air")
+
+c_plot(easia_air) +
+  labs(title = "Deaths in Major East Asian Airlines") 
+```
+
+
+In East Asia, China Southern Airlines, All Nippon Airways, Korean Airlines, then Asiana Airlines had the highest median number of deaths (in this order).    
+
+
+Once again though, this graph may not be fair as we are not accounting for the size of the planes amongst other factors. More on this in the Discussion.    
+
+
+However, for all these airlines overall, there does not appear to be much variation in the median number of people dead. With this being, take this with a grain of salt as statistical tests would be needed to determine this.  
+
+```{r}
+us_air %>% 
+  group_by(operator) %>% 
+  select(operator, dead) %>% 
+  summarize(count = n()) %>% 
+  arrange(desc(count))
+
+euro_air %>% 
+  group_by(operator) %>% 
+  select(operator, dead) %>% 
+  summarize(count = n())%>% 
+  arrange(desc(count))
+
+
+easia_air %>% 
+  group_by(operator) %>% 
+  select(operator, dead) %>% 
+  summarize(count = n()) %>% 
+  arrange(desc(count))
+
+```
+
+Even if the median are similar, however, this becomes a different story when we look at the number of crashes they have been involved in.  
+American Airlines, for an example, has been in far more crashes than Delta or Pacific Southwest.
+Air France has been more accidents than the other 4 airlines below it.  
+In East Asia, the numbers appear to be rather similar. This may be because East Asian airlines are fairly new in comparison with American or European airlines.  
+This, once again, should come with an asterisk; measures of statistical significance cannot be measured without a test. Nonetheless, these numbers help supplement our understanding of which airlines were deadly.  
+
+# Discussion
+
+From these graphs, we discovered a few things.
+
+First, plane accidents appear to be fluctuating quite a bit, although they have been decreasing since roughly 1975. This is interesting and could likely be attributed to better engineering and such, but could be looked into more.
+
+Second, the most deadly plane operators and plane types. It seems to make sense that the U.S. Air Force is up there on the list of most deadly plane operators. I was not expecting the others, such as Aeroflot, Air France, or Indian Airlines. The table also helps shows that Aeroflot -- somehow -- has been the most deadly operator. This is likely because this dataset did not count military deaths under 10.  
+To a degree, I wonder if this could be partially be how long some of these companies have been run. I know for a fact that Aeroflot and Air France were formed in 1923 and 1933 respectively, so the fact that it has been running so many flights could result in it having more accidents. 
+
+As for plane types, as shown in the table, the Douglas DC-3 has been involved in the most accidents at 256. Looking at the median number of people dead, however, this is the Yakolev YAK-40.
+
+I think that the Douglas DC-3 makes sense -- it was one of the earlier commerical airplanes therefore one could expect it to be involved in the most plane crashes. I do wonder if the median number of people dead, in this case, is that useful of a statistic. Now, to an extent, the median number of people dead does matter. On the other hand, however, it does not particularly consider how many people are on the plane. If I were to go back and do this project again, I would try to define it as a proportion of the number of passengers aboard.   
+
+Interestingly enough, both the Douglas DC-3 and Yakolev YAK-40 are planes widely used by both Air France and Aeroflot (both top 5 most frequent plane crash operators).  
+
+
+As for the airlines, while certainly interesting, there seems to be an issue of plane size -- once again. Even if the median number of people dead is higher for American Airlines than Delta, for example, maybe less people aboard died for American Airlines. This is not to say that the number of people dead does not matter; the median is certainly useful. Rather, the proportions would help to supplement our understanding of the data itself.  
+
+I also wish that I had found a better way of arranging any of these boxplots. They are, I have to admit, rather poorly constructed. I attempted to arrange by highest median number of deaths, but this did not work out as the colors then did not match to the name of the operator/plane type/airline. Nonetheless, because it is constructed alphabetically, it makes it rather difficult to realize which have the highest median number of deaths. If given more time and assistance, I would have gone over and done this.   
+
+
+Finally, I wish that I had been able to make a *regression model* -- a statistical tool that helps us understand which variables contribute to another one -- to better determine what factors are important. I tried multiple times, but this was not possible due to the size of the dataset and rather poor wifi. I believe that it would have been really interesting.    
+
+Despite all of the flaws, of which there are many, I hope that you have enjoyed this brief exploration of what exactly has happened to airplane crashes historically and which operators, plane types, and airlines proved to be deadly.  
+
+# Acknowledgments
+
+Thank you to Professor Malcolm-White for always being so helpful. I would not have been able to do finish this project without her guidance, and thank you to the other 212 students who always help on Slack.
+
+
+<!-- ```{r (military)} -->
+<!-- p_c %>%  -->
+<!--   filter(str_detect(operator, "Military ") )  %>%  -->
+<!--   filter(str_detect(Summary, "shot down | shot"))  -->
+
+<!-- p_c %>%  -->
+<!--   mutate(year = as.integer(year) ) %>%  -->
+<!--   #filter(str_detect(operator, "Military ") )  %>%  -->
+<!--   filter(str_detect(Summary, "shot down | shot"))  %>%  -->
+<!--   ggplot( aes(x = year , y = dead)) +  -->
+<!--   geom_point() +  -->
+<!--   theme_fivethirtyeight() -->
+
+
+
+<!-- p_c %>%  -->
+<!--   group_by(Route) %>%  -->
+<!--   summarize(t_dead = sum(dead) ) %>%  -->
+<!--   arrange(desc(t_dead)) -->
+
+
+<!-- p_c %>%  -->
+<!--   filter(Route == "Training") %>%  -->
+<!--   select(operator, planeType) -->
+<!-- ``` -->
+
+
